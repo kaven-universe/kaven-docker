@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Tauri: Run Dev (no debugger)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cargo run --manifest-path src-tauri/Cargo.toml",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "ui:dev"
+    },
+    {
+      "name": "Tauri: Debug Rust (CodeLLDB)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "build",
+          "--manifest-path",
+          "src-tauri/Cargo.toml"
+        ],
+        "filter": {
+          "name": "dockyard-registry",
+          "kind": "bin"
+        }
+      },
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "ui:dev",
+      "sourceLanguages": [
+        "rust"
+      ],
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    }
+  ]
+}
