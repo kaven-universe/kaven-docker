@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Tauri: Run Dev (no debugger)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cargo run --manifest-path \"${workspaceFolder}/src-tauri/Cargo.toml\"",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "ui:dev",
+      "postDebugTask": "dev:stop"
+    },
+    {
+      "name": "Tauri: Debug Rust (CodeLLDB)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "build",
+          "--manifest-path",
+          "${workspaceFolder}/src-tauri/Cargo.toml"
+        ],
+        "filter": {
+          "name": "kaven-docker",
+          "kind": "bin"
+        }
+      },
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "ui:dev",
+      "postDebugTask": "dev:stop",
+      "sourceLanguages": [
+        "rust"
+      ],
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    }
+  ]
+}
