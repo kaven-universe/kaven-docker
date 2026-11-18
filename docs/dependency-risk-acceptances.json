@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "npm": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "url": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "expiresOn": "2027-02-17"
+    }
+  ]
+}
