@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-windows:
+    name: Verify Windows release source
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate release identity
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -ne 'tag') {
+            throw "Release workflow must be triggered by a tag."
+          }
+          ./scripts/test-release-identity.ps1 -Tag $env:GITHUB_REF_NAME
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca
+        with:
+          toolchain: 1.99.1
+          components: clippy,rustfmt
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify frontend
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run test:audit-policy
+          npm run build
+          npm run audit:npm
+
+      - name: Verify Rust
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings
+          cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked
+          npm run verify:schemas
+
+      - name: Audit Rust dependencies
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo audit --file src-tauri/Cargo.lock
+
+  release-windows:
+    name: Build Windows installer
+    environment: release
+    runs-on: windows-latest
+    needs: verify-windows
+    timeout-minutes: 90
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca
+        with:
+          toolchain: 1.99.1
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Generate release SBOMs
+        shell: pwsh
+        run: |
+          npm sbom --sbom-format cyclonedx | Out-File -LiteralPath npm.cdx.json -Encoding utf8
+          cargo install cargo-cyclonedx --version 0.5.10 --locked
+          cargo cyclonedx --manifest-path src-tauri/Cargo.toml --format json
+
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Kaven Docker ${{ github.ref_name }}
+          generateReleaseNotes: false
+          releaseDraft: true
+          prerelease: false
+          releaseAssetNamePattern: "Kaven-Docker_[version]_[arch][setup][ext]"
+
+      - name: Publish checksums and SBOMs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $release = gh release view $env:RELEASE_TAG --json isDraft,assets | ConvertFrom-Json
+          if (-not $release.isDraft) {
+            throw "Release $env:RELEASE_TAG must remain a draft until all evidence is attached."
+          }
+          $installerAssets = @($release.assets | Where-Object { $_.name -like 'Kaven-Docker_*-setup.exe' })
+          if ($installerAssets.Count -ne 1) {
+            throw "Expected exactly one uploaded NSIS installer, found $($installerAssets.Count)."
+          }
+          if (-not ($release.assets.name -contains 'latest.json')) {
+            throw 'The signed updater manifest latest.json is missing.'
+          }
+          if (@($release.assets | Where-Object { $_.name -like '*.sig' }).Count -lt 1) {
+            throw 'The updater signature asset is missing.'
+          }
+
+          $evidenceDirectory = Join-Path $env:RUNNER_TEMP 'kaven-docker-release-evidence'
+          New-Item -ItemType Directory -Path $evidenceDirectory | Out-Null
+          gh release download $env:RELEASE_TAG `
+            --pattern $installerAssets[0].name `
+            --dir $evidenceDirectory
+          $downloadedInstaller = Join-Path $evidenceDirectory $installerAssets[0].name
+          $evidence = @(
+            $downloadedInstaller,
+            (Resolve-Path -LiteralPath npm.cdx.json).Path,
+            (Resolve-Path -LiteralPath src-tauri/kaven-docker.cdx.json).Path
+          )
+          $lines = foreach ($path in $evidence) {
+            $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $path
+            '{0}  {1}' -f $hash.Hash.ToLowerInvariant(), (Split-Path -Leaf $path)
+          }
+          [IO.File]::WriteAllLines('SHA256SUMS', [string[]]$lines, [Text.Encoding]::ASCII)
+          gh release upload $env:RELEASE_TAG `
+            npm.cdx.json `
+            src-tauri/kaven-docker.cdx.json `
+            SHA256SUMS `
+            --clobber
+
+          $finalAssets = gh release view $env:RELEASE_TAG --json assets | ConvertFrom-Json
+          foreach ($requiredAsset in @('npm.cdx.json', 'kaven-docker.cdx.json', 'SHA256SUMS')) {
+            if (-not ($finalAssets.assets.name -contains $requiredAsset)) {
+              throw "Release evidence asset is missing: $requiredAsset"
+            }
+          }
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release edit $env:RELEASE_TAG `
+            --notes-file "docs/releases/$env:RELEASE_TAG.md" `
+            --draft=false `
+            --prerelease=false `
+            --latest

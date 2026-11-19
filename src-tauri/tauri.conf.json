@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kaven Docker",
+  "version": "0.2.1",
+  "identifier": "xyz.kaven.app.docker",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1421",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist",
+    "windows": {
+      "staticVCRuntime": true
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "create": false,
+        "title": "Kaven Docker",
+        "width": 1320,
+        "height": 820,
+        "minWidth": 1000,
+        "minHeight": 650,
+        "resizable": true,
+        "decorations": false,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'; base-uri 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "shortDescription": "Private Docker Registry manager",
+    "longDescription": "Manage repositories, tags and manifests in private Docker registries.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "template": "windows/installer.nsi"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "requireSignedVersion": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYyN0VDNkU4NEEyOUI1QzEKUldUQnRTbEs2TVorOGkvMVF2cnRTN2wram1VZm9pTmdFbzIxOXVVNnlWS0pFUTMyMGxONEhmZTEK",
+      "endpoints": [
+        "https://public.data.kaven.xyz/json/kaven-docker/latest.json"
+      ],
+      "windows": {
+        "installMode": "quiet"
+      }
+    }
+  }
+}

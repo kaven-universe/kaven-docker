@@ -1,0 +1,51 @@
+{
+  "name": "kaven-docker",
+  "version": "0.2.1",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "audit:npm": "node scripts/audit-npm.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:audit-policy": "node --test scripts/audit-npm.policy.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "verify:schemas": "node scripts/verify-generated-schemas.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.45.0",
+    "@tanstack/vue-query": "^5.90.0",
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@tauri-apps/plugin-opener": "^2.7.3",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.22",
+    "vue-i18n": "^11.4.21"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "2.12.6",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "eslint": "^10.15.0",
+    "eslint-plugin-vue": "^10.12.1",
+    "globals": "^16.5.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.2",
+    "vite": "^7.3.8",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.0.8"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "vue-demi@0.14.10": true
+  }
+}
